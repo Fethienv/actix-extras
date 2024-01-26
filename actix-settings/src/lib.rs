@@ -75,6 +75,9 @@ use std::{
     time::Duration,
 };
 
+#[cfg(feature = "openssl")]
+use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
+
 use actix_http::{Request, Response};
 use actix_service::IntoServiceFactory;
 use actix_web::{
@@ -258,13 +261,22 @@ where
     B: MessageBody + 'static,
 {
     fn apply_settings(mut self, settings: &ActixSettings) -> Self {
+        #[cfg(feature = "openssl")] 
         if settings.tls.enabled {
-            // for Address { host, port } in &settings.actix.hosts {
-            //     self = self.bind(format!("{}:{}", host, port))
-            //         .unwrap(/*TODO*/);
-            // }
-            unimplemented!("[ApplySettings] TLS support has not been implemented yet.");
-        } else {
+
+            for Address { host, port } in &settings.hosts {
+
+                let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+                builder.set_private_key_file(&settings.tls.private_key, SslFiletype::PEM).unwrap();
+                builder.set_certificate_chain_file(&settings.tls.certificate).unwrap();
+
+                self = self.bind_openssl(format!("{}:{}", host, port), builder)
+                    .unwrap(/*TODO*/);  
+            }
+            //unimplemented!("[ApplySettings] TLS support has not been implemented yet.");
+        }
+
+        if !settings.tls.enabled {   
             for Address { host, port } in &settings.hosts {
                 self = self.bind(format!("{host}:{port}"))
                     .unwrap(/*TODO*/);
